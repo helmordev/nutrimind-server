@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    /* Defaults */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ESNext",
+    "allowJs": true,
+    "checkJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+
+    /* Paths */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "ignoreDeprecations": "6.0",
+
+    /* Bundling */
+    "moduleResolution": "Bundler",
+    "outDir": "./dist",
+    "types": ["bun-types"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["./node_modules", "./dist", "vitest.config.ts"]
+}
