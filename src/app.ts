@@ -3,16 +3,24 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
+import { auth } from '@/config/auth';
 import { db } from '@/config/database';
 import { env } from '@/config/env';
 import { mongoClient } from '@/config/mongodb';
 import { redis } from '@/config/redis';
+import adminRoutes from '@/features/admin/admin.routes';
+import studentAuthRoutes from '@/features/auth/auth.routes';
+import teacherRoutes from '@/features/teacher/teacher.routes';
 import { errorHandler } from '@/shared/middleware/error-handler';
 import { requestLogger } from '@/shared/middleware/logger';
 
 const app = new Hono();
 
-// ── Middleware ────────────────────────────────────────────────────────────────
+// ── Better Auth Handler ───────────────────────────────────────────────────────
+// Must be mounted before feature routes so /api/auth/** is intercepted first.
+app.on(['POST', 'GET'], '/api/auth/**', (c) => auth.handler(c.req.raw));
+
+// ── Global Middleware ─────────────────────────────────────────────────────────
 app.use(requestId());
 app.use(requestLogger);
 app.use(
@@ -22,6 +30,11 @@ app.use(
   }),
 );
 app.use(secureHeaders());
+
+// ── Feature Routes ────────────────────────────────────────────────────────────
+app.route('/api/v1/students/auth', studentAuthRoutes);
+app.route('/api/v1/teachers', teacherRoutes);
+app.route('/api/v1/admin', adminRoutes);
 
 // ── Health Check ──────────────────────────────────────────────────────────────
 app.get('/health', async (c) => {
