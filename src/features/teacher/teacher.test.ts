@@ -1,7 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-// ── Shared mock user fixtures ─────────────────────────────────────────────────
-
 const mockTeacherProfile = {
   id: 'teacher-id-001',
   email: 'teacher@school.edu',
@@ -14,7 +12,7 @@ const mockTeacherProfile = {
   updatedAt: new Date('2024-01-01'),
 };
 
-// ── Mock Better Auth middleware — before app import ───────────────────────────
+// ── Mock Better Auth middleware — before route import ─────────────────────────
 mock.module('@/shared/middleware/better-auth', () => ({
   betterAuthMiddleware: async (
     c: { set: (k: string, v: unknown) => void; req: { header: (k: string) => string | undefined } },
@@ -53,7 +51,23 @@ mock.module('@/shared/middleware/better-auth', () => ({
   },
 }));
 
-// ── Mock teacher service — before app import ──────────────────────────────────
+mock.module('@/shared/middleware/role', () => ({
+  requireRole:
+    (role: string) => async (c: { get: (k: string) => unknown }, next: () => Promise<void>) => {
+      const user = c.get('user') as { role?: string } | undefined;
+      if (!user) {
+        const { AuthError } = require('@/shared/lib/errors');
+        throw new AuthError('Authentication required', 'AUTH_REQUIRED');
+      }
+      if (user.role !== role) {
+        const { ForbiddenError } = require('@/shared/lib/errors');
+        throw new ForbiddenError(`${role} access only`, 'FORBIDDEN_TEACHER_ONLY');
+      }
+      return next();
+    },
+}));
+
+// ── Mock teacher service — before route import ────────────────────────────────
 const mockGetTeacherProfile = mock(async (id: string) => {
   if (id === 'teacher-id-001') return { ...mockTeacherProfile };
   const { NotFoundError } = require('@/shared/lib/errors');
@@ -82,13 +96,18 @@ mock.module('@/features/teacher/teacher.service', () => ({
   updateTeacherProfile: mockUpdateTeacherProfile,
 }));
 
-// ── Lazy app import (after mocks) ─────────────────────────────────────────────
-let app: typeof import('@/app').default;
-beforeAll(async () => {
-  app = (await import('@/app')).default;
-});
+// ── Build a minimal test app using only teacher routes ───────────────────────
+// This avoids shared app.ts module-cache interference across test files.
+import { Hono } from 'hono';
+import { errorHandler } from '@/shared/middleware/error-handler';
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+let app: Hono;
+beforeAll(async () => {
+  const { default: teacherRoutes } = await import('@/features/teacher/teacher.routes');
+  app = new Hono();
+  app.route('/api/v1/teachers', teacherRoutes);
+  app.onError(errorHandler);
+});
 
 describe('GET /api/v1/teachers/me', () => {
   it('returns teacher profile for authenticated teacher', async () => {

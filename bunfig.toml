@@ -1,0 +1,4 @@
+[test]
+# Run each test file in its own isolated worker so mock.module() calls
+# don't leak across files when running the full test suite.
+smol = false

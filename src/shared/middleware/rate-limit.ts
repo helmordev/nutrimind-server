@@ -4,13 +4,10 @@ import { redis } from '@/config/redis';
 import { AppError } from '@/shared/lib/errors';
 
 export interface RateLimitOptions {
-  // Max requests allowed in the window
   max: number;
-  // Window duration in seconds
   windowSec: number;
   // Key prefix for Redis — e.g. "student_login" → "rate_limit:student_login:{id}:{window}"
   keyPrefix: string;
-  // Returns the identifier to rate-limit on (e.g. IP, studentId)
   identifier: (c: Context) => string | Promise<string>;
 }
 

@@ -13,7 +13,7 @@ async function bootstrap(): Promise<void> {
     logger.warn({ err }, 'MongoDB connection failed — server will start in degraded mode');
   }
 
-  // Connect Redis — non-fatal
+  // Connect Redis — non-fatal: server still starts, health check reports status
   try {
     await redis.connect();
     logger.info('Redis connected');
@@ -21,7 +21,6 @@ async function bootstrap(): Promise<void> {
     logger.warn({ err }, 'Redis connection failed — server will start in degraded mode');
   }
 
-  // Start server — always runs regardless of service health
   Bun.serve({
     port: env.PORT,
     fetch: app.fetch,

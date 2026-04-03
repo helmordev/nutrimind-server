@@ -34,7 +34,6 @@ export function errorHandler(err: Error, c: Context): Response {
     );
   }
 
-  // Unexpected error
   logger.error({ err }, 'Unhandled error');
   return c.json(
     {

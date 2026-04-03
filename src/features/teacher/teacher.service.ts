@@ -38,7 +38,6 @@ export async function updateTeacherProfile(
   if (data.lastName !== undefined) updates.lastName = data.lastName;
   if (data.school !== undefined) updates.school = data.school ?? null;
 
-  // Keep display name in sync
   const newFirst = updates.firstName ?? current.firstName;
   const newLast = updates.lastName ?? current.lastName;
   updates.name = `${newFirst} ${newLast}`;

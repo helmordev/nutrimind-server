@@ -1,7 +1,11 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { auth } from '@/config/auth';
 import { db } from '@/config/database';
-import type { CreateTeacherInput, UpdateTeacherInput } from '@/features/admin/admin.schema';
+import type {
+  CreateTeacherInput,
+  PaginationQuery,
+  UpdateTeacherInput,
+} from '@/features/admin/admin.schema';
 import type { AdminTeacherView } from '@/features/admin/admin.types';
 import { user } from '@/features/auth/auth.table';
 import { NotFoundError } from '@/shared/lib/errors';
@@ -23,9 +27,17 @@ function toAdminTeacherView(row: typeof user.$inferSelect): AdminTeacherView {
   };
 }
 
-export async function listTeachers(): Promise<AdminTeacherView[]> {
-  const rows = await db.select().from(user).where(eq(user.role, 'teacher'));
-  return rows.map(toAdminTeacherView);
+export async function listTeachers(
+  pagination: PaginationQuery,
+): Promise<{ teachers: AdminTeacherView[]; total: number }> {
+  const offset = (pagination.page - 1) * pagination.limit;
+
+  const [rows, [totals]] = await Promise.all([
+    db.select().from(user).where(eq(user.role, 'teacher')).limit(pagination.limit).offset(offset),
+    db.select({ total: count() }).from(user).where(eq(user.role, 'teacher')),
+  ]);
+
+  return { teachers: rows.map(toAdminTeacherView), total: totals?.total ?? 0 };
 }
 
 export async function getTeacherById(id: string): Promise<AdminTeacherView> {
@@ -38,13 +50,12 @@ export async function createTeacher(
   data: CreateTeacherInput,
   requestHeaders: Headers,
 ): Promise<AdminTeacherView> {
-  // Use Better Auth admin plugin to create user — handles password hashing + account creation.
   const result = await auth.api.createUser({
     body: {
       email: data.email,
       name: `${data.firstName} ${data.lastName}`,
       password: data.password,
-      role: 'admin', // Better Auth only accepts "user" | "admin"; we track "teacher" via direct DB update
+      role: 'admin', // Better Auth only accepts "user" | "admin"; "teacher" set via direct DB update below
       data: {
         firstName: data.firstName,
         lastName: data.lastName,
@@ -54,12 +65,19 @@ export async function createTeacher(
     headers: requestHeaders,
   });
 
-  // Set role to "teacher" directly — Better Auth's createUser only accepts "user" | "admin"
   const [updated] = await db
     .update(user)
     .set({ role: 'teacher', updatedAt: new Date() })
     .where(eq(user.id, result.user.id))
-    .returning();
+    .returning()
+    .catch(async (err) => {
+      // Safety fallback: ban the dangling admin account to prevent privilege escalation
+      await db
+        .update(user)
+        .set({ banned: true, banReason: 'Creation failed — role not set', updatedAt: new Date() })
+        .where(eq(user.id, result.user.id));
+      throw err;
+    });
 
   if (!updated) {
     throw new NotFoundError('Failed to finalize teacher creation', 'TEACHER_CREATE_FAILED');
@@ -82,7 +100,6 @@ export async function updateTeacher(
   if (data.school !== undefined) updates.school = data.school ?? null;
   if (data.email !== undefined) updates.email = data.email;
 
-  // Keep display name in sync when name parts change
   if (data.firstName !== undefined || data.lastName !== undefined) {
     const newFirst = updates.firstName ?? current.firstName;
     const newLast = updates.lastName ?? current.lastName;

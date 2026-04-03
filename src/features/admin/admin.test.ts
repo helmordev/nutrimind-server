@@ -1,7 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 
-// ── Shared mock fixtures ──────────────────────────────────────────────────────
-
 const mockTeacher1 = {
   id: 'teacher-id-001',
   email: 'teacher1@school.edu',
@@ -32,15 +30,7 @@ const mockTeacher2 = {
   updatedAt: new Date('2024-01-02'),
 };
 
-// ── Seed student-auth as passthrough — MUST be before app first loads ────────
-// admin.test.ts runs first (alphabetically) and is the first to import @/app.
-// Once app loads, all middleware modules are cached. auth.test.ts later overrides
-// this mock via live-binding, but only if the module was already in mock-cache here.
-mock.module('@/shared/middleware/student-auth', () => ({
-  studentAuthMiddleware: async (_c: unknown, next: () => Promise<void>) => next(),
-}));
-
-// ── Mock Better Auth middleware — before app import ───────────────────────────
+// ── Mock Better Auth middleware — before route import ─────────────────────────
 mock.module('@/shared/middleware/better-auth', () => ({
   betterAuthMiddleware: async (
     c: { set: (k: string, v: unknown) => void; req: { header: (k: string) => string | undefined } },
@@ -69,8 +59,25 @@ mock.module('@/shared/middleware/better-auth', () => ({
   },
 }));
 
-// ── Mock admin service — before app import ────────────────────────────────────
-const mockListTeachers = mock(async () => [mockTeacher1, mockTeacher2]);
+mock.module('@/shared/middleware/role', () => ({
+  requireRole:
+    (role: string) =>
+    async (c: { get: (k: string) => { role?: string } }, next: () => Promise<void>) => {
+      const user = c.get('user') as { role?: string } | undefined;
+      if (!user) {
+        const { AuthError } = require('@/shared/lib/errors');
+        throw new AuthError('Authentication required', 'AUTH_REQUIRED');
+      }
+      if (user.role !== role) {
+        const { ForbiddenError } = require('@/shared/lib/errors');
+        throw new ForbiddenError(`${role} access only`, 'FORBIDDEN_ADMIN_ONLY');
+      }
+      return next();
+    },
+}));
+
+// ── Mock admin service — before route import ──────────────────────────────────
+const mockListTeachers = mock(async () => ({ teachers: [mockTeacher1, mockTeacher2], total: 2 }));
 
 const mockGetTeacherById = mock(async (id: string) => {
   if (id === 'teacher-id-001') return { ...mockTeacher1 };
@@ -123,18 +130,22 @@ mock.module('@/features/admin/admin.service', () => ({
   changeTeacherRole: mockChangeTeacherRole,
 }));
 
-// ── Lazy app import (after mocks) ─────────────────────────────────────────────
-let app: typeof import('@/app').default;
+// ── Build a minimal test app using only admin routes ──────────────────────────
+// This avoids shared app.ts module-cache interference across test files.
+import { Hono } from 'hono';
+import { errorHandler } from '@/shared/middleware/error-handler';
+
+let app: Hono;
 beforeAll(async () => {
-  app = (await import('@/app')).default;
+  const { default: adminRoutes } = await import('@/features/admin/admin.routes');
+  app = new Hono();
+  app.route('/api/v1/admin', adminRoutes);
+  app.onError(errorHandler);
 });
 
-// ── Helper ────────────────────────────────────────────────────────────────────
 function adminHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return { 'x-test-session': 'admin-session', ...extra };
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/v1/admin/teachers', () => {
   it('returns list of teachers for admin', async () => {

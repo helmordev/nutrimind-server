@@ -1,15 +1,15 @@
+import { createHash } from 'node:crypto';
 import { createMiddleware } from 'hono/factory';
 import { env } from '@/config/env';
+import { redis } from '@/config/redis';
 import type { StudentTokenPayload } from '@/features/auth/auth.types';
 import { AuthError } from '@/shared/lib/errors';
 
-// Verifies the student JWT Bearer token.
-// Attaches `student` to Hono context variables.
 // Use ONLY for student routes — never mix with betterAuthMiddleware.
 export const studentAuthMiddleware = createMiddleware(async (c, next) => {
   const authorization = c.req.header('Authorization');
 
-  if (!authorization || !authorization.startsWith('Bearer ')) {
+  if (!authorization?.startsWith('Bearer ')) {
     throw new AuthError('Bearer token required', 'AUTH_REQUIRED');
   }
 
@@ -17,8 +17,20 @@ export const studentAuthMiddleware = createMiddleware(async (c, next) => {
 
   try {
     const payload = await verifyStudentToken(token, env.JWT_SECRET);
+
+    if (payload.type !== 'access') {
+      throw new AuthError('Invalid token type', 'AUTH_INVALID_TOKEN');
+    }
+
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const isBlocklisted = await redis.get(`blocklist:access:${tokenHash}`);
+    if (isBlocklisted) {
+      throw new AuthError('Token has been revoked', 'AUTH_TOKEN_REVOKED');
+    }
+
     c.set('student', payload);
-  } catch {
+  } catch (err) {
+    if (err instanceof AuthError) throw err;
     throw new AuthError('Invalid or expired token', 'AUTH_INVALID_TOKEN');
   }
 

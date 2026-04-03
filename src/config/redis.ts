@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { env } from '@/config/env';
+import { logger } from '@/shared/middleware/logger';
 
 export const redis = new Redis(env.UPSTASH_REDIS_URL, {
   maxRetriesPerRequest: null,
@@ -8,6 +9,5 @@ export const redis = new Redis(env.UPSTASH_REDIS_URL, {
   tls: env.UPSTASH_REDIS_URL.startsWith('rediss://') ? {} : undefined,
 });
 
-redis.on('error', (err) => {
-  console.error('Redis connection error:', err.message);
-});
+redis.on('connect', () => logger.info('Redis connected'));
+redis.on('error', (err) => logger.error({ err }, 'Redis connection error'));

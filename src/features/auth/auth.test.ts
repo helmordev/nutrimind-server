@@ -1,13 +1,10 @@
 import { beforeAll, describe, expect, it, mock } from 'bun:test';
 
-// ── Mock rate-limit — must be declared before app import ─────────────────────
+// ── Mock rate-limit — must be declared before route import ───────────────────
 mock.module('@/shared/middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 
-// ── Mock auth service ─────────────────────────────────────────────────────────
-// Only mock the functions the route handlers actually call.
-// signAccessToken / signRefreshToken are not called directly by any handler.
 mock.module('@/features/auth/auth.service', () => ({
   verifyStudentToken: mock(async (token: string) => {
     if (token === 'valid-access-token') {
@@ -27,9 +24,9 @@ mock.module('@/features/auth/auth.service', () => ({
     const { AuthError } = require('@/shared/lib/errors');
     throw new AuthError('Invalid or expired token', 'AUTH_INVALID_TOKEN');
   }),
+  logoutStudent: mock(async () => {}),
 }));
 
-// ── Mock student-auth middleware ──────────────────────────────────────────────
 mock.module('@/shared/middleware/student-auth', () => ({
   studentAuthMiddleware: async (
     c: { set: (k: string, v: unknown) => void; req: { header: (k: string) => string | undefined } },
@@ -50,13 +47,18 @@ mock.module('@/shared/middleware/student-auth', () => ({
   },
 }));
 
-// ── Lazy app import (after mocks are registered) ──────────────────────────────
-let app: typeof import('@/app').default;
-beforeAll(async () => {
-  app = (await import('@/app')).default;
-});
+// ── Build a minimal test app using only auth routes ──────────────────────────
+// This avoids shared app.ts module-cache interference across test files.
+import { Hono } from 'hono';
+import { errorHandler } from '@/shared/middleware/error-handler';
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+let app: Hono;
+beforeAll(async () => {
+  const { default: studentAuthRoutes } = await import('@/features/auth/auth.routes');
+  app = new Hono();
+  app.route('/api/v1/students/auth', studentAuthRoutes);
+  app.onError(errorHandler);
+});
 
 describe('POST /api/v1/students/auth/login', () => {
   it('returns 404 NOT_IMPLEMENTED (Sprint 1 stub)', async () => {

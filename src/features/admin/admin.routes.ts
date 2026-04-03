@@ -3,6 +3,8 @@ import { Hono } from 'hono';
 import {
   changeRoleSchema,
   createTeacherSchema,
+  paginationQuerySchema,
+  teacherIdParamSchema,
   updateTeacherSchema,
 } from '@/features/admin/admin.schema';
 import {
@@ -21,47 +23,60 @@ import '@/features/auth/auth.types';
 
 const app = new Hono();
 
-// All admin routes require a valid Better Auth session and "admin" role
 app.use(betterAuthMiddleware);
 app.use(requireRole('admin'));
 
-// GET /api/v1/admin/teachers
-app.get('/teachers', async (_c) => {
-  const teachers = await listTeachers();
-  return successResponse(_c, teachers);
+app.get('/teachers', zValidator('query', paginationQuerySchema), async (c) => {
+  const pagination = c.req.valid('query');
+  const { teachers, total } = await listTeachers(pagination);
+  return successResponse(c, teachers, 200, {
+    page: pagination.page,
+    limit: pagination.limit,
+    total,
+    totalPages: Math.ceil(total / pagination.limit),
+  });
 });
 
-// POST /api/v1/admin/teachers
 app.post('/teachers', zValidator('json', createTeacherSchema), async (c) => {
   const data = c.req.valid('json');
   const teacher = await createTeacher(data, c.req.raw.headers);
   return successResponse(c, teacher, 201);
 });
 
-// GET /api/v1/admin/teachers/:id
-app.get('/teachers/:id', async (c) => {
-  const teacher = await getTeacherById(c.req.param('id'));
+app.get('/teachers/:id', zValidator('param', teacherIdParamSchema), async (c) => {
+  const { id } = c.req.valid('param');
+  const teacher = await getTeacherById(id);
   return successResponse(c, teacher);
 });
 
-// PATCH /api/v1/admin/teachers/:id
-app.patch('/teachers/:id', zValidator('json', updateTeacherSchema), async (c) => {
-  const data = c.req.valid('json');
-  const teacher = await updateTeacher(c.req.param('id'), data);
-  return successResponse(c, teacher);
-});
+app.patch(
+  '/teachers/:id',
+  zValidator('param', teacherIdParamSchema),
+  zValidator('json', updateTeacherSchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const data = c.req.valid('json');
+    const teacher = await updateTeacher(id, data);
+    return successResponse(c, teacher);
+  },
+);
 
-// DELETE /api/v1/admin/teachers/:id — soft-deactivate (sets banned = true)
-app.delete('/teachers/:id', async (c) => {
-  await deactivateTeacher(c.req.param('id'));
+app.delete('/teachers/:id', zValidator('param', teacherIdParamSchema), async (c) => {
+  const { id } = c.req.valid('param');
+  await deactivateTeacher(id);
   return successResponse(c, { message: 'Teacher deactivated successfully' });
 });
 
-// PATCH /api/v1/admin/teachers/:id/role
-app.patch('/teachers/:id/role', zValidator('json', changeRoleSchema), async (c) => {
-  const { role } = c.req.valid('json');
-  const teacher = await changeTeacherRole(c.req.param('id'), role);
-  return successResponse(c, teacher);
-});
+app.patch(
+  '/teachers/:id/role',
+  zValidator('param', teacherIdParamSchema),
+  zValidator('json', changeRoleSchema),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const { role } = c.req.valid('json');
+    const teacher = await changeTeacherRole(id, role);
+    return successResponse(c, teacher);
+  },
+);
 
 export default app;

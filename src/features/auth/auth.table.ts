@@ -12,11 +12,9 @@ export const user = pgTable('user', {
   image: text('image'),
   createdAt: timestamp('created_at').notNull(),
   updatedAt: timestamp('updated_at').notNull(),
-  // additionalFields
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   school: text('school'),
-  // admin plugin
   role: text('role'),
   banned: boolean('banned'),
   banReason: text('ban_reason'),
@@ -34,7 +32,6 @@ export const session = pgTable('session', {
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
-  // admin plugin
   impersonatedBy: text('impersonated_by'),
 });
 
