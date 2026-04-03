@@ -23,7 +23,31 @@ async function bootstrap(): Promise<void> {
 
   Bun.serve({
     port: env.PORT,
-    fetch: app.fetch,
+    fetch(req, server) {
+      const { pathname } = new URL(req.url);
+
+      // TEST: intercept WS upgrade before Hono — remove when Phase 7 WS is wired up
+      if (pathname === '/ws/test') {
+        const upgraded = server.upgrade(req);
+        if (upgraded) return undefined;
+        return new Response('WebSocket upgrade failed', { status: 400 });
+      }
+
+      return app.fetch(req);
+    },
+    websocket: {
+      open(ws) {
+        logger.info('Test WS connection opened');
+        ws.send(JSON.stringify({ type: 'connected', message: 'NutriMind WS test ready' }));
+      },
+      message(ws, data) {
+        logger.info({ data }, 'Test WS message received');
+        ws.send(JSON.stringify({ type: 'echo', data: String(data) }));
+      },
+      close(_ws, code, reason) {
+        logger.info({ code, reason }, 'Test WS connection closed');
+      },
+    },
   });
 
   logger.info(`🚀 NutriMind server running on port ${env.PORT}`);
