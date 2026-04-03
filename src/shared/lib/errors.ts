@@ -4,7 +4,7 @@ export class AppError extends Error {
 
   constructor(message: string, statusCode: number, code: string) {
     super(message);
-    this.name = "AppError";
+    this.name = 'AppError';
     this.statusCode = statusCode;
     this.code = code;
     Object.setPrototypeOf(this, new.target.prototype);
@@ -12,9 +12,9 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message: string, code = "NOT_FOUND") {
+  constructor(message: string, code = 'NOT_FOUND') {
     super(message, 404, code);
-    this.name = "NotFoundError";
+    this.name = 'NotFoundError';
   }
 }
 
@@ -22,22 +22,22 @@ export class ValidationError extends AppError {
   public readonly details?: unknown;
 
   constructor(message: string, details?: unknown) {
-    super(message, 400, "VALIDATION_ERROR");
-    this.name = "ValidationError";
+    super(message, 400, 'VALIDATION_ERROR');
+    this.name = 'ValidationError';
     this.details = details;
   }
 }
 
 export class AuthError extends AppError {
-  constructor(message: string, code = "UNAUTHORIZED") {
+  constructor(message: string, code = 'UNAUTHORIZED') {
     super(message, 401, code);
-    this.name = "AuthError";
+    this.name = 'AuthError';
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message: string, code = "FORBIDDEN") {
+  constructor(message: string, code = 'FORBIDDEN') {
     super(message, 403, code);
-    this.name = "ForbiddenError";
+    this.name = 'ForbiddenError';
   }
 }

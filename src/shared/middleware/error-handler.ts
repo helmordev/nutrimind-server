@@ -1,7 +1,7 @@
-import type { Context } from "hono";
-import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { AppError, ValidationError } from "@/shared/lib/errors";
-import { logger } from "@/shared/middleware/logger";
+import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { AppError, ValidationError } from '@/shared/lib/errors';
+import { logger } from '@/shared/middleware/logger';
 
 export function errorHandler(err: Error, c: Context): Response {
   if (err instanceof ValidationError) {
@@ -35,13 +35,13 @@ export function errorHandler(err: Error, c: Context): Response {
   }
 
   // Unexpected error
-  logger.error({ err }, "Unhandled error");
+  logger.error({ err }, 'Unhandled error');
   return c.json(
     {
       success: false,
       error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message: "An unexpected error occurred",
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'An unexpected error occurred',
       },
     },
     500 as ContentfulStatusCode,
